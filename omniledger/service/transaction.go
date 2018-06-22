@@ -65,13 +65,37 @@ type ObjectID struct {
 	InstanceID Nonce
 }
 
+// NewObjectID returns a new ObjectID given a slice of bytes.
+func NewObjectID(buf []byte) ObjectID {
+	if len(buf) != 64 {
+		return ObjectID{}
+	}
+	return ObjectID{buf[0:32], NewNonce(buf[32:64])}
+}
+
 // Slice returns concatenated DarcID and InstanceID.
 func (oid ObjectID) Slice() []byte {
 	return append(oid.DarcID[:], oid.InstanceID[:]...)
 }
 
+// Equal returns if both objectIDs point to the same instance.
+func (oid ObjectID) Equal(other ObjectID) bool {
+	return bytes.Compare(oid.DarcID, other.DarcID) == 0 &&
+		bytes.Compare(oid.InstanceID[:], other.InstanceID[:]) == 0
+}
+
 // Nonce is used to prevent replay attacks in instructions.
 type Nonce [32]byte
+
+// NewNonce returns a nonce given a slice of bytes.
+func NewNonce(buf []byte) Nonce {
+	if len(buf) != 32 {
+		return Nonce{}
+	}
+	n := Nonce{}
+	copy(n[:], buf)
+	return n
+}
 
 // Spawn is called upon an existing object that will spawn a new object.
 type Spawn struct {
