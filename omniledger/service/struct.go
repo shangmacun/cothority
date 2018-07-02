@@ -26,6 +26,9 @@ type collectionDB struct {
 // on a collection.
 type CollectionView interface {
 	Get(key []byte) collection.Getter
+	GetValues(key []byte) (value []byte, contractID string, err error)
+	GetValue(key []byte) ([]byte, error)
+	GetContractID(key []byte) (string, error)
 }
 
 // roCollection is a wrapper for a collection that satisfies interface
@@ -42,11 +45,42 @@ func (r *roCollection) Get(key []byte) collection.Getter {
 	return r.c.Get(key)
 }
 
+func (r *roCollection) GetValues(key []byte) (value []byte, contractID string, err error) {
+	record, err := r.c.Get(key).Record()
+	if err != nil {
+		return
+	}
+	values, err := record.Values()
+	if err != nil {
+		return
+	}
+	var ok bool
+	value, ok = values[0].([]byte)
+	if !ok {
+		err = errors.New("first value is not a slice of bytes")
+		return
+	}
+	contractID, ok = values[1].(string)
+	if !ok {
+		contractID = string(values[1].([]byte))
+	}
+	return
+}
+
+func (r *roCollection) GetValue(key []byte) ([]byte, error) {
+	v, _, err := r.GetValues(key)
+	return v, err
+}
+func (r *roCollection) GetContractID(key []byte) (string, error) {
+	_, c, err := r.GetValues(key)
+	return c, err
+}
+
 // OmniLedgerContract is the type signature of the class functions
 // which can be registered with the omniledger service.
 // Since the outcome of the verification depends on the state of the collection
 // which is to be modified, we pass it as a pointer here.
-type OmniLedgerContract func(coll CollectionView, tx Instruction, inCoins []Coin) (sc []StateChange, outCoins []Coin, err error)
+type OmniLedgerContract func(coll CollectionView, inst Instruction, inCoins []Coin) (sc []StateChange, outCoins []Coin, err error)
 
 // newCollectionDB initialises a structure and reads all key/value pairs to store
 // it in the collection.
