@@ -3,13 +3,11 @@ package ch.epfl.dedis.lib.omniledger.contracts;
 import ch.epfl.dedis.lib.eventlog.Event;
 import ch.epfl.dedis.lib.eventlog.SearchResponse;
 import ch.epfl.dedis.lib.omniledger.InstanceId;
-import ch.epfl.dedis.lib.omniledger.SecureKG;
 import org.junit.jupiter.api.Test;
 
 import ch.epfl.dedis.integration.TestServerController;
 import ch.epfl.dedis.integration.TestServerInit;
 import ch.epfl.dedis.lib.exception.CothorityCommunicationException;
-import ch.epfl.dedis.lib.omniledger.Configuration;
 import ch.epfl.dedis.lib.omniledger.OmniledgerRPC;
 import ch.epfl.dedis.lib.omniledger.darc.Darc;
 import ch.epfl.dedis.lib.omniledger.darc.Signer;
@@ -37,40 +35,27 @@ class EventLogInstanceTest {
 
     @BeforeEach
     void initAll() throws Exception {
-        // Change this flag to true if you wish to test against the secure KG server. We do not test it by default
-        // because it might overwhelm the server if the tests are executed repeatedly.
-        boolean useSecureKGServer = false;
-        if (useSecureKGServer) {
-            ol = SecureKG.getOmniledgerRPC();
-            if (!ol.checkLiveness()) {
-                throw new CothorityCommunicationException("liveness check failed");
-            }
-            admin = SecureKG.getSigner();
-            el = new EventLogInstance(ol, SecureKG.getEventlogId());
-        } else {
-            testInstanceController = TestServerInit.getInstance();
-            admin = new SignerEd25519();
-            Map<String, byte[]> rules = Darc.initRules(Arrays.asList(admin.getIdentity()),
-                    Arrays.asList(admin.getIdentity()));
-            rules.put("spawn:eventlog", admin.getIdentity().toString().getBytes());
-            rules.put("invoke:eventlog", admin.getIdentity().toString().getBytes());
-            Darc genesisDarc = new Darc(rules, "genesis".getBytes());
+        testInstanceController = TestServerInit.getInstance();
+        admin = new SignerEd25519();
+        Map<String, byte[]> rules = Darc.initRules(Arrays.asList(admin.getIdentity()),
+                Arrays.asList(admin.getIdentity()));
+        rules.put("spawn:eventlog", admin.getIdentity().toString().getBytes());
+        rules.put("invoke:eventlog", admin.getIdentity().toString().getBytes());
+        Darc genesisDarc = new Darc(rules, "genesis".getBytes());
 
-            Configuration config = new Configuration(testInstanceController.getRoster(), Duration.of(100, MILLIS));
-            ol = new OmniledgerRPC(genesisDarc, config);
-            if (!ol.checkLiveness()) {
-                throw new CothorityCommunicationException("liveness check failed");
-            }
-
-            el = new EventLogInstance(ol, Arrays.asList(admin), genesisDarc.getId());
+        ol = new OmniledgerRPC(testInstanceController.getRoster(), genesisDarc, Duration.of(100, MILLIS));
+        if (!ol.checkLiveness()) {
+            throw new CothorityCommunicationException("liveness check failed");
         }
+
+        el = new EventLogInstance(ol, Arrays.asList(admin), genesisDarc.getId());
     }
 
     @Test
     void log() throws Exception {
         Event e = new Event("hello", "goodbye");
         InstanceId key = el.log(e, Arrays.asList(admin));
-        Thread.sleep(5 * ol.getConfig().getBlockInterval().toMillis());
+        Thread.sleep(2 * ol.getConfig().getBlockInterval().toMillis());
         Event loggedEvent = el.get(key);
         assertEquals(loggedEvent, e);
     }
@@ -85,7 +70,7 @@ class EventLogInstanceTest {
             // add all the events. So we have to limit the number of events that we add.
             keys.add(el.log(event, Arrays.asList(admin)));
         }
-        Thread.sleep(5 * ol.getConfig().getBlockInterval().toMillis());
+        Thread.sleep(2 * ol.getConfig().getBlockInterval().toMillis());
         for (InstanceId key : keys) {
             Event event2 = el.get(key);
             assertEquals(event, event2);
@@ -98,7 +83,7 @@ class EventLogInstanceTest {
         Event event = new Event(now, "login", "alice");
         el.log(event, Arrays.asList(admin));
 
-        Thread.sleep(5 * ol.getConfig().getBlockInterval().toMillis());
+        Thread.sleep(2 * ol.getConfig().getBlockInterval().toMillis());
 
         // finds the event under any topic
         SearchResponse resp = el.search("", now - 1000, now + 1000);
