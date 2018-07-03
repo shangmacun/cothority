@@ -145,8 +145,7 @@ func (bft *ByzCoinX) Dispatch() error {
 
 	// prepare phase (part 2)
 	prepSig := <-bft.prepSigChan
-	nbrFault := FaultThreshold(len(bft.List()))
-	err := cosi.Verify(bft.suite, bft.publics, bft.Msg, prepSig, cosi.NewThresholdPolicy(len(bft.List())-nbrFault))
+	err := cosi.Verify(bft.suite, bft.publics, bft.Msg, prepSig, cosi.NewThresholdPolicy(bft.Threshold))
 	if err != nil {
 		log.Lvl2("Signature verification failed on root during the prepare phase with error:", err)
 		bft.FinalSignatureChan <- FinalSignature{nil, nil}
@@ -263,4 +262,9 @@ func InitBFTCoSiProtocol(suite cosi.Suite, c *onet.Context, vf, ack protocol.Ver
 // FaultThreshold computes the number of faults that byzcoinx tolerates.
 func FaultThreshold(n int) int {
 	return (n - 1) / 3
+}
+
+// Threshold computes the number of nodes needed for successful operation.
+func Threshold(n int) int {
+	return n - FaultThreshold(n)
 }

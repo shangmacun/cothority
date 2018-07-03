@@ -1179,7 +1179,7 @@ func (s *Service) startBFT(proto string, roster *onet.Roster, msg, data []byte) 
 	root.CreateProtocol = s.CreateProtocol
 	root.FinalSignatureChan = make(chan byzcoinx.FinalSignature, 1)
 	root.Timeout = s.propTimeout
-	root.Threshold = len(tree.List()) //TODO: implement 2/3 threshold
+	root.Threshold = byzcoinx.Threshold(len(tree.List()))
 	if s.bftTimeout != 0 {
 		root.Timeout = s.bftTimeout
 	}

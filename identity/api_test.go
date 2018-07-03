@@ -98,7 +98,7 @@ func TestIdentity_StoreKeys(t *testing.T) {
 	c.Msg = hash
 	c.CreateProtocol = local.CreateProtocol
 	c.Timeout = time.Second * 5
-	c.Threshold = len(tree.List()) - byzcoinx.FaultThreshold(len(tree.List()))
+	c.Threshold = byzcoinx.Threshold(len(tree.List()))
 
 	err = node.Start()
 	require.Nil(t, err)

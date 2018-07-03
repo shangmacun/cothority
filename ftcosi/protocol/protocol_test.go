@@ -331,6 +331,9 @@ func TestProtocolErrors(t *testing.T) {
 }
 
 func TestProtocolRefusalAll(t *testing.T) {
+	if testing.Short() {
+		t.Skip("takes too long for Travis")
+	}
 	nodes := []int{4, 5, 13}
 	subtrees := []int{1, 2, 5}
 	proposal := []byte{0xFF}
