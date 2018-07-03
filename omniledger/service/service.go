@@ -411,7 +411,7 @@ func (s *Service) updateCollection(msg network.Message) {
 	// Check whether we are storing a genesis config, if we are, also set
 	// the leaderMap.
 	if scs.isGenesisConfig() {
-		// TODO we need to rotate the leader
+		// The leader starts as the first one in the roster.
 		leader := sb.Roster.List[0]
 		if err := s.leaderMap.add(string(sb.SkipChainID()), leader); err != nil {
 			log.Error("failed to add entry in leaderMap", err)
@@ -499,21 +499,16 @@ func (s *Service) loadLatestDarc(sid skipchain.SkipBlockID, dID darc.ID) (*darc.
 func (s *Service) startPolling(scID skipchain.SkipBlockID, interval time.Duration) chan bool {
 	closeSignal := make(chan bool)
 	go func() {
-		to := time.After(interval)
 		for {
 			select {
-			case <-to:
-				if b := s.db().GetByID(scID); b == nil {
-					to = time.After(interval)
-					continue
-				}
+			case <-time.After(interval):
 				sb, err := s.db().GetLatestByID(scID)
 				if err != nil {
 					panic("DB is in bad state and cannot find skipchain anymore: " + err.Error())
 				}
-				// The node that start polling should be the
-				// roster, which is not always the 0th node in
-				// the roster.
+				// We assume the caller of this function is the
+				// current leader. So we generate a tree with
+				// this node as the root.
 				tree := sb.Roster.GenerateNaryTreeWithRoot(len(sb.Roster.List), s.ServerIdentity())
 				proto, err := s.CreateProtocol(collectTxProtocol, tree)
 				if err != nil {
@@ -525,8 +520,7 @@ func (s *Service) startPolling(scID skipchain.SkipBlockID, interval time.Duratio
 					panic("cannot start protocol: " + err.Error())
 				}
 
-				// TODO set the right timeout
-				innerTo := time.After(time.Second)
+				protocolTimeout := time.After(s.skService().GetPropTimeout())
 				var txs ClientTransactions
 			collectTxLoop:
 				for {
@@ -537,7 +531,7 @@ func (s *Service) startPolling(scID skipchain.SkipBlockID, interval time.Duratio
 						} else {
 							break collectTxLoop
 						}
-					case <-innerTo:
+					case <-protocolTimeout:
 						log.Lvl2(s.ServerIdentity(), "timeout while collecting transactions from other nodes")
 						break collectTxLoop
 					}
@@ -545,7 +539,6 @@ func (s *Service) startPolling(scID skipchain.SkipBlockID, interval time.Duratio
 
 				if txs.IsEmpty() {
 					log.Lvl3(s.ServerIdentity(), "no new transactions, not creating new block")
-					to = time.After(interval)
 					continue
 				}
 
@@ -553,7 +546,6 @@ func (s *Service) startPolling(scID skipchain.SkipBlockID, interval time.Duratio
 				if err != nil {
 					log.Error("couldn't create new block: " + err.Error())
 				}
-				to = time.After(interval)
 			case <-closeSignal:
 				log.Lvl2(s.ServerIdentity(), "stopping polling")
 				return
@@ -663,7 +655,12 @@ clientTransactions:
 	return cdbTemp.GetRoot(), ctsOK, states, nil
 }
 
-func (s *Service) getTxs(scID skipchain.SkipBlockID) ClientTransactions {
+func (s *Service) getTxs(leader *network.ServerIdentity, scID skipchain.SkipBlockID) ClientTransactions {
+	actualLeader := s.leaderMap.get(string(scID))
+	if !leader.Equal(actualLeader) {
+		log.Lvl1("getTxs came from a wrong leader")
+		return []ClientTransaction{}
+	}
 	return s.txBuffer.take(string(scID))
 }
 
